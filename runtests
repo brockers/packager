@@ -1,0 +1,73 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Global variables for running tests
+APP="packager"
+OWNER="github.com/brockers"
+PWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+
+# Text Colors and Messaging Functions
+scriptName=$(basename "$0")
+if [[ $- == *i* ]] || [[ $TERM == 'xterm-256color' ]]; then
+# if tty -s ; then
+	textReset=$(tput sgr0)
+	textRed=$(tput setaf 1)
+	textGreen=$(tput setaf 2)
+	textYellow=$(tput setaf 3)
+else
+	textReset=" ----"
+	textYellow="!--- "
+	textRed="!!!- "
+	textGreen="---- "
+fi
+
+m_input () {
+	echo -n "$textGreen[$scriptName]$textReset $1"
+}
+m_info () {
+	echo "$textGreen[$scriptName]$textReset $1"
+}
+m_warning () {
+	echo "$textYellow[$scriptName]$textReset $1"
+}
+m_error () {
+	echo "$textRed[$scriptName]$textReset $1"
+	exit 1
+}
+
+export PWD
+export GOPATH="$PWD/temp"
+export PATH=$GOPATH/bin:/bin:/usr/bin:/user/local/bin
+
+rm -rf "$GOPATH"
+mkdir -p "$GOPATH/src/$OWNER"
+mkdir -p "$GOPATH/bin"
+ln -f -s "$PWD"  "$GOPATH/src/$OWNER/$APP"
+
+cd "$PWD" || m_error "Unable to CD to Project Dir"
+
+
+m_info "========================================================"
+m_info "      Setting Clean ENV (go get && go install)"
+m_info "========================================================"
+
+go get "$OWNER/$APP"
+go install "$OWNER/$APP"
+
+m_info "========================================================"
+m_info "      Running Unit Tests (go test) "
+m_info "========================================================"
+
+go test "$OWNER/$APP"
+
+m_info "========================================================"
+m_info "      Running E2E Tests (bats) "
+m_info "========================================================"
+
+# Make sure we have bats to run bash E2E tests
+command -v bats > /dev/null 2>&1 || {
+	m_error "Program bats is not installed. E2E tests cannot be run."
+}
+
+bats "${PWD}/test/$APP.bats"
